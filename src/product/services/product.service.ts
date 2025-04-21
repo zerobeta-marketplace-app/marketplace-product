@@ -6,6 +6,8 @@ import { Product } from '../entities/product.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { CreateProductDto } from '../dto/create-product.dto';
 import { ClientKafka } from '@nestjs/microservices';
+import { HttpService } from '@nestjs/axios';
+import axios from 'axios';
 
 @Injectable()
 export class ProductService {
@@ -17,24 +19,41 @@ export class ProductService {
     private readonly productRepo: Repository<Product>,
 
     @Inject('PRODUCT_KAFKA_SERVICE')
+    @Inject(HttpService)
+    private readonly httpService: HttpService,
+
+    @Inject('PRODUCT_KAFKA_SERVICE')
     private readonly kafkaClient: ClientKafka,
   ) {}
 
-  async createProduct(dto: CreateProductDto) {
-    const product = this.productRepo.create(dto);
+  async createProduct(sellerId: number, dto: CreateProductDto): Promise<Product> {
+    const product = this.productRepo.create({
+      ...dto,
+      sellerId,
+    });
+    console.log('Product to be saved:', product);
     const saved = await this.productRepo.save(product);
-    await this.cacheManager.del('products'); // invalidate cache
 
-     // Kafka emit
-     this.kafkaClient.emit('product.created', {
-        id: saved.id,
-        productCode: saved.productCode,
-        productName: saved.productName,
-        price: saved.price,
-        stock: saved.availableStock,
-        sellerId: saved.sellerId,
-      });
+    // Invalidate Redis cache
+    await this.cacheManager.del('products');
+
+    // Emit Kafka event
+    this.kafkaClient.emit('product.created', {
+      id: saved.id,
+      productCode: saved.productCode,
+      productName: saved.productName,
+      price: saved.price,
+      stock: saved.availableStock,
+      sellerId: saved.sellerId,
+    });
+
     return saved;
+  }
+
+  async getProductsBySeller(sellerId: number): Promise<Product[]> {
+    return await this.productRepo.find({
+      where: { sellerId },
+    });
   }
 
   async getAllProducts(): Promise<Product[]> {
@@ -42,9 +61,35 @@ export class ProductService {
     if (cached) return cached;
 
     const products = await this.productRepo.find();
-    await this.cacheManager.set('products', products, 1800); // 30 min cache
-    return products;
-  }
+    // Make REST calls to get seller info
+  const enrichedProducts = await Promise.all(
+    products.map(async (product) => {
+      try {
+        const { data: seller } = await axios.get(
+          `http://user-service:3004/users/${product.sellerId}`
+        );
+
+        console.log('Seller data:', seller.firstName, seller.lastName);
+        return {
+          ...product,
+          sellerName: `${seller.firstName} ${seller.lastName}`,
+          sellerCountry: seller.country,
+        };
+      } catch (error) {
+        console.error(`Failed to fetch seller info for ID ${product.sellerId}`);
+        return {
+          ...product,
+          sellerName: 'Unknown',
+          sellerCountry: 'Unknown',
+        };
+      }
+    })
+  );
+
+  await this.cacheManager.set('products', enrichedProducts, 1800);
+  return enrichedProducts;
+}
+  
 
   async updateInventory(productId: number, quantity: number) {
     const product = await this.productRepo.findOneBy({ id: productId });

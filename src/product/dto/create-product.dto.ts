@@ -1,8 +1,6 @@
 import { IsNotEmpty, IsString, IsNumber, MaxLength, Min } from 'class-validator';
 
 export class CreateProductDto {
-  @IsNumber()
-  sellerId: number;
 
   @IsString()
   @IsNotEmpty()

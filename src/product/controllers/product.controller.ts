@@ -8,15 +8,26 @@ import { ApiTags, ApiOperation } from '@nestjs/swagger';
 export class ProductController {
   constructor(private readonly productService: ProductService) {}
 
-  @Post()
-  @ApiOperation({ summary: 'Add new product' })
-  create(@Body() dto: CreateProductDto) {
-    return this.productService.createProduct(dto);
+  @Post(':sellerId')
+  @ApiOperation({ summary: 'Add new product for seller' })
+  create(
+    @Param('sellerId', ParseIntPipe) sellerId: number,
+    @Body() dto: CreateProductDto) {
+      console.log('✅ Received sellerId from param:', sellerId);
+      console.log('📥 DTO body:', dto);
+    return this.productService.createProduct(+sellerId, dto);
+  }
+
+  @Get('seller/:sellerId')
+  @ApiOperation({ summary: 'Get all products by seller ID' })
+  getProductsBySeller(@Param('sellerId') sellerId: string) {
+    return this.productService.getProductsBySeller(+sellerId);
   }
 
   @Get()
   @ApiOperation({ summary: 'Get all products (with caching)' })
   findAll() {
+    console.log(`📦fetching all products  ${this.productService.getAllProducts()}`)
     return this.productService.getAllProducts();
   }
 
