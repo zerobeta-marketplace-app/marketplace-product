@@ -65,6 +65,7 @@ export class ProductService {
   const enrichedProducts = await Promise.all(
     products.map(async (product) => {
       try {
+        
         const { data: seller } = await axios.get(
           `http://user-service:3004/users/${product.sellerId}`
         );
