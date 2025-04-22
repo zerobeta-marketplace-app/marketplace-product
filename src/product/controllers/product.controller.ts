@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   ParseIntPipe,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -15,12 +16,14 @@ import {
 } from '@nestjs/swagger';
 import { ProductService } from '../services/product.service';
 import { CreateProductDto } from '../dto/create-product.dto';
+import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 
 @ApiTags('Products')
 @Controller('products')
 export class ProductController {
   constructor(private readonly productService: ProductService) {}
 
+  @UseGuards(JwtAuthGuard)
   @Post(':sellerId')
   @ApiOperation({ summary: 'Add new product for seller' })
   @ApiParam({ name: 'sellerId', type: Number, example: 3 })
@@ -31,7 +34,8 @@ export class ProductController {
   ) {
     return this.productService.createProduct(sellerId, dto);
   }
-
+  
+  @UseGuards(JwtAuthGuard)
   @Get('seller/:sellerId')
   @ApiOperation({ summary: 'Get all products by seller ID' })
   @ApiParam({ name: 'sellerId', type: Number, example: 3 })
@@ -39,12 +43,14 @@ export class ProductController {
     return this.productService.getProductsBySeller(+sellerId);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get()
   @ApiOperation({ summary: 'Get all products (with caching)' })
   findAll() {
     return this.productService.getAllProducts();
   }
 
+  @UseGuards(JwtAuthGuard)
   @Patch(':id/inventory')
   @ApiOperation({ summary: 'Update product inventory' })
   @ApiParam({ name: 'id', type: Number, example: 5 })
